@@ -19,7 +19,7 @@ object Survival {
     spark.sparkContext.setLogLevel("ERROR")
 
     // Specify data file
-    val filePath = "titanic.csv"
+    val filePath = "data/titanic.csv"
 
     val passengers = spark.read.option("header","true"). option("inferSchema","true"). csv(filePath)
     val passengers1 = passengers
@@ -41,9 +41,9 @@ object Survival {
 
     val passengers2 = indexer.fit(passengers1).transform(passengers1)
 
+    //println("Drop instances with empty values")
     val passengers3 = passengers2.na.drop()
-
-    println("Orig = "+passengers2.count()+" Final = "+ passengers3.count() + "Dropped = "+ (passengers2.count() - passengers3.count()))
+    //println("Orig = "+passengers2.count()+" Final = "+ passengers3.count() + "Dropped = "+ (passengers2.count() - passengers3.count()))
 
     val assembler = new VectorAssembler()
       .setInputCols(Array("Pclass","GenderCat","Age","SibSp","Parch","Fare"))
@@ -52,35 +52,35 @@ object Survival {
     val passengers4 = assembler.transform(passengers3)
 
     val Array(train, test) = passengers4.randomSplit(Array(0.9, 0.1))
-    println("Train = "+train.count()+" Test = "+test.count())
+    //println("Train = "+train.count()+" Test = "+test.count())
 
-    val algTree = new DecisionTreeClassifier()
+    val classifier = new DecisionTreeClassifier()
       .setLabelCol("Survived")
       .setImpurity("entropy") // could be "gini"
       .setMaxBins(32)
       .setMaxDepth(5)
 
-    val mdlTree = algTree.fit(train)
-    println("The tree has %d nodes.".format(mdlTree.numNodes))
-    println(mdlTree.toDebugString)
-    println(mdlTree.toString)
-    println(mdlTree.featureImportances)
+    val model = classifier.fit(train)
 
-    val predictions = mdlTree.transform(test)
-    predictions.show(5)
+    println("The Decision tree has %d nodes.".format(model.numNodes))
+    println(model.toDebugString)
+    println(model.toString)
+    println(model.featureImportances)
+
+    val predictions = model.transform(test)
+    predictions.show(10)
 
     // model evaluation
     val evaluator = new MulticlassClassificationEvaluator()
     evaluator.setLabelCol("Survived")
-    evaluator.setMetricName("accuracy") // could be f1, "weightedPrecision" or "weightedRecall"
-    //
+    evaluator.setMetricName("weightedRecall") // could be f1, "weightedPrecision" or "weightedRecall"
+
     val startTime = System.nanoTime()
-    val accuracy = evaluator.evaluate(predictions)
-    println("Test Accuracy = %.2f%%".format(accuracy*100))
-    //
+    val recall = evaluator.evaluate(predictions)
+    println("Test Recall = %.2f%%".format(recall*100))
+
     val elapsedTime = (System.nanoTime() - startTime) / 1e9
     println("Elapsed time: %.2fseconds".format(elapsedTime))
-
 
     spark.stop()
     println("Disconnected from Spark")
