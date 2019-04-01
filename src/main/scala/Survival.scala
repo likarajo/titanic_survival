@@ -1,6 +1,6 @@
 import org.apache.spark.ml.classification.DecisionTreeClassifier
 import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
-import org.apache.spark.ml.feature._
+import org.apache.spark.ml.feature.{StringIndexer, VectorAssembler}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.types.DoubleType
 
@@ -21,20 +21,37 @@ object Survival {
     // Specify data file
     val filePath = "data/titanic.csv"
 
-    val passengers = spark.read.option("header","true"). option("inferSchema","true"). csv(filePath)
-    val passengers1 = passengers
-      .select(passengers("Pclass"),
-        passengers("Survived").cast(DoubleType).as("Survived"),
-        passengers("Gender"),
-        passengers("Age"),
-        passengers("SibSp"),
-        passengers("Parch"),
-        passengers("Fare")
-      )
+    val passengers = spark.read.option("header", "true").option("inferSchema", "true").csv(filePath)
 
-    //
+    // How many passengers were there on titanic?
+    println("There were total " + passengers.count() + " passengers")
+
+    // Get the columns that we need further
+    val passengers1 = passengers.select(
+      passengers("Pclass"),
+      passengers("Survived").cast(DoubleType).as("Survived"),
+      passengers("Gender"),
+      passengers("Age"),
+      passengers("SibSp"),
+      passengers("Parch"),
+      passengers("Fare")
+    )
+
+    // print the schema of passengers1
+    passengers1.printSchema()
+
+    // Find the gender distribution of passengers
+    val gender_dist = passengers1.groupBy("Gender").count().as("Gender")
+    println("Total")
+    gender_dist.show()
+
+    // Find the number of males and females that survived
+    import spark.implicits._
+    val survived_gender_dist = passengers1.filter($"Survived" === 1.0).groupBy("Gender").count()
+    println("Survived")
+    survived_gender_dist.show()
+
     // VectorAssembler does not support the StringType type. So convert Gender to numeric
-    //
     val indexer = new StringIndexer()
       .setInputCol("Gender")
       .setOutputCol("GenderCat")
@@ -46,7 +63,7 @@ object Survival {
     //println("Orig = "+passengers2.count()+" Final = "+ passengers3.count() + "Dropped = "+ (passengers2.count() - passengers3.count()))
 
     val assembler = new VectorAssembler()
-      .setInputCols(Array("Pclass","GenderCat","Age","SibSp","Parch","Fare"))
+      .setInputCols(Array("Pclass", "GenderCat", "Age", "SibSp", "Parch", "Fare"))
       .setOutputCol("features")
 
     val passengers4 = assembler.transform(passengers3)
@@ -77,7 +94,7 @@ object Survival {
 
     val startTime = System.nanoTime()
     val recall = evaluator.evaluate(predictions)
-    println("Test Recall = %.2f%%".format(recall*100))
+    println("Test Recall = %.2f%%".format(recall * 100))
 
     val elapsedTime = (System.nanoTime() - startTime) / 1e9
     println("Elapsed time: %.2fseconds".format(elapsedTime))
